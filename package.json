@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@langchain/google-genai": "^2.1.25",
+    "axios": "^1.13.6",
+    "bullmq": "^5.70.4",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  }
+}
