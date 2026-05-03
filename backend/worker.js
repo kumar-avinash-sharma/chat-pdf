@@ -86,7 +86,9 @@ const worker = new Worker(
     connection: {
       host: "localhost",
       port: 6379,
+      
     },
+    lockduration : 5 * 60 * 1000,
   }
 );
 

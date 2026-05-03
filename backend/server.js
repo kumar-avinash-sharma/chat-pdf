@@ -17,6 +17,8 @@ import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 
 import { QdrantVectorStore } from "@langchain/qdrant";
 
+const PORT = process.env.PORT || 8000;
+
 const queue = new Queue("file-upload-queue" , {connection: {
   host: "localhost",
   port: 6379
@@ -130,6 +132,6 @@ ${context}`
 
 
 
-app.listen(8000, () => {
+app.listen(PORT, () => {
   console.log("Server running on port 8000");
 });
