@@ -1,118 +1,112 @@
-
 import cors from 'cors';
 import express from "express";
-import multer  from 'multer';
-import { Queue } from "bullmq";
-// import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-// Remove this:
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-
-// Add this:
+import multer from 'multer';
 import { ChatGroq } from "@langchain/groq";
 import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 import { v4 as uuidv4 } from "uuid";
 import 'dotenv/config';
-
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
-
 import { QdrantVectorStore } from "@langchain/qdrant";
-
-const PORT = process.env.PORT || 8000;
-
-const queue = new Queue("file-upload-queue" , {connection: {
-  host: "localhost",
-  port: 6379
-}});
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, './uploads')
-    console.log(req.body)
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, `${uniqueSuffix}-${file.originalname}`)
-  }
-})
-const upload = multer({ storage: storage })
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import { CharacterTextSplitter } from "@langchain/textsplitters";
 
 const app = express();
 app.use(cors());
 
-app.post("/upload" , upload.single("pdf") , async (req,res) =>{
-  const pdfId = uuidv4();
-  await queue.add("file-ready", { 
-    pdfId,
-    filename: req.file.filename,
-    type : req.file.mimetype,
-    source : req.file.destination,
-    path : req.file.path,
-    size : req.file.size,
+const PORT = process.env.PORT || 8000;
 
-  });
-  console.log(req.file.destination);
-  return res.json({message :'uploading done.' , pdfId})
-})
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, './uploads');
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `${uniqueSuffix}-${file.originalname}`);
+  }
+});
+const upload = multer({ storage });
 
-app.get("/chat", async (req, res) => {
+// ─── UPLOAD + PROCESS ───────────────────────────────────────────────────────
+app.post("/upload", upload.single("pdf"), async (req, res) => {
   try {
-    const userQuery = req.query.query;
-    const pdfId = req.query.pdfId;
+    const pdfId = uuidv4();
 
-    if (!userQuery || !pdfId) {
-      return res.status(400).json({ error: "query or pdfId missing" });
-    }
+    // 1. Load PDF
+    const loader = new PDFLoader(req.file.path);
+    const docs = await loader.load();
+    if (!docs || docs.length === 0) throw new Error("No text extracted from PDF");
+    console.log("✅ PDF loaded, pages:", docs.length);
 
-    console.log("Query received:", userQuery);
+    // 2. Split into chunks
+    const splitter = new CharacterTextSplitter({ chunkSize: 800, chunkOverlap: 100 });
+    const chunkedDocs = await splitter.splitDocuments(docs);
+    if (!chunkedDocs || chunkedDocs.length === 0) throw new Error("Chunking failed");
+    console.log("✅ Chunks created:", chunkedDocs.length);
+
+    // 3. Embed + store in Qdrant
+    const embeddings = new GoogleGenerativeAIEmbeddings({
+      modelName: "gemini-embedding-2-preview",
+      apiKey: process.env.GOOGLE_API_KEY,
+    });
 
     const collectionName = `pdf-${pdfId}`;
+    await QdrantVectorStore.fromDocuments(chunkedDocs, embeddings, {
+      url: "http://localhost:6333",
+      collectionName,
+    });
+    console.log("✅ Stored in Qdrant:", collectionName);
+
+    return res.json({ message: "Upload and processing done.", pdfId });
+
+  } catch (err) {
+    console.error("❌ Upload error:", err);
+    return res.status(500).json({ error: "Failed to process PDF" });
+  }
+});
+
+// ─── CHAT ────────────────────────────────────────────────────────────────────
+app.get("/chat", async (req, res) => {
+  try {
+    const { query: userQuery, pdfId } = req.query;
+    if (!userQuery || !pdfId) return res.status(400).json({ error: "query or pdfId missing" });
 
     const embeddings = new GoogleGenerativeAIEmbeddings({
       modelName: "gemini-embedding-2-preview",
       apiKey: process.env.GOOGLE_API_KEY,
     });
 
-    const vectorStore = await QdrantVectorStore.fromExistingCollection(
-      embeddings,
-      {
-        url: "http://localhost:6333",
-        collectionName,
-      }
-    );
+    // 1. Retrieve relevant chunks
+    const vectorStore = await QdrantVectorStore.fromExistingCollection(embeddings, {
+      url: "http://localhost:6333",
+      collectionName: `pdf-${pdfId}`,
+    });
 
-    const retriever = vectorStore.asRetriever({ k: 3 });
-
-    const result = await retriever.invoke(userQuery);
-
-    console.log("Results length:", result.length);
-    
-
+    const result = await vectorStore.asRetriever({ k: 3 }).invoke(userQuery);
     if (!result || result.length === 0) {
-      return res.json({
-        answer: "No relevant context found in PDF",
-        sources: [],
-      });
+      return res.json({ answer: "No relevant context found in PDF", sources: [] });
     }
 
+    // 2. Build prompt + call Groq
     const context = result.map(doc => doc.pageContent).join("\n");
 
-    const systemMessage = new SystemMessage(
-      `You are an assistant for question-answering tasks.
-Use the context to answer.
-If not found, say "Within the context of the PDF, I don't know".
-Max 3 sentences.
-
-Context:
-${context}`
-    );
-
     const llm = new ChatGroq({
-      model: "llama-3.3-70b-versatile",  // or "gemma2-9b-it", "mixtral-8x7b-32768"
+      model: "llama-3.3-70b-versatile",
       apiKey: process.env.GROQ_API_KEY,
     });
 
+
     const response = await llm.invoke([
-      systemMessage,
+      new SystemMessage(
+        `You are a helpful assistant that answers questions strictly based on the provided PDF context.
+    
+    - If the user sends greetings like "hey", "hello", "hi" — respond warmly and ask what they'd like to know about the document.
+    - If the question cannot be answered from the context, say "I couldn't find that in the PDF."
+    - Keep answers to 3 sentences max.
+    - Never make up information not present in the context.
+
+Context:
+${context}`
+      ),
       new HumanMessage(userQuery),
     ]);
 
@@ -125,13 +119,9 @@ ${context}`
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ Chat error:", err);
     res.status(500).json({ error: "Something went wrong" });
   }
 });
 
-
-
-app.listen(PORT, () => {
-  console.log("Server running on port 8000");
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
