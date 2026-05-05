@@ -51,7 +51,8 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
 
     const collectionName = `pdf-${pdfId}`;
     await QdrantVectorStore.fromDocuments(chunkedDocs, embeddings, {
-      url: "http://localhost:6333",
+      url: process.env.QDRANT_URL,
+      apiKey: process.env.QDRANT_API_KEY,
       collectionName,
     });
     console.log("✅ Stored in Qdrant:", collectionName);
