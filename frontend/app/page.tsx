@@ -3,17 +3,29 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 
+type Source = {
+  page: number;
+  content: string;
+};
+
+type Message = {
+  role: "user" | "ai";
+  text: string;
+  sources?: Source[];
+  error?: boolean;
+};
+
 export default function PDFChat() {
-  const [file, setFile] = useState(null);
-  const [status, setStatus] = useState("");
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [pdfUploaded, setPdfUploaded] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [status, setStatus] = useState<string>("");
+  const [input, setInput] = useState<string>("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [pdfUploaded, setPdfUploaded] = useState<boolean>(false);
+  const [uploading, setUploading] = useState<boolean>(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [pdfId, setPdfId] = useState(null);
+  const [pdfId, setPdfId] = useState<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,9 +41,9 @@ export default function PDFChat() {
     const userMessage = input.trim();
     setInput("");
 
-    setMessages(prev => [
+    setMessages((prev: Message[]) => [
       ...prev,
-      { role: "user", text: userMessage }
+      { role: "user", text: userMessage },
     ]);
 
     setLoading(true);
@@ -47,23 +59,22 @@ export default function PDFChat() {
         }
       );
 
-      setMessages(prev => [
+      setMessages((prev: Message[]) => [
         ...prev,
         {
           role: "ai",
           text: res.data.answer,
-          sources: res.data.sources
-        }
+          sources: res.data.sources,
+        },
       ]);
-
     } catch (err) {
-      setMessages(prev => [
+      setMessages((prev: Message[]) => [
         ...prev,
         {
           role: "ai",
           text: "Sorry, something went wrong. Please try again.",
-          error: true
-        }
+          error: true,
+        },
       ]);
       console.error(err);
     }
@@ -71,7 +82,7 @@ export default function PDFChat() {
     setLoading(false);
   };
 
-  const handleFileChange = (e) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
@@ -115,6 +126,24 @@ export default function PDFChat() {
     }
   };
 
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.classList.add("ring-2", "ring-cyan-500/50", "bg-cyan-500/5");
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.currentTarget.classList.remove("ring-2", "ring-cyan-500/50", "bg-cyan-500/5");
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove("ring-2", "ring-cyan-500/50", "bg-cyan-500/5");
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile?.type === "application/pdf") {
+      setFile(droppedFile);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800">
       {/* Decorative background elements */}
@@ -124,7 +153,6 @@ export default function PDFChat() {
       </div>
 
       <div className="relative z-10 max-w-5xl mx-auto h-screen flex flex-col">
-
         {/* HEADER */}
         <header className="border-b border-slate-700/50 bg-slate-900/50 backdrop-blur-sm px-6 py-4">
           <div className="flex items-center justify-between">
@@ -132,7 +160,9 @@ export default function PDFChat() {
               <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
                 PDF Chat Assistant
               </h1>
-              <p className="text-sm text-slate-400 mt-1">Ask questions about your documents</p>
+              <p className="text-sm text-slate-400 mt-1">
+                Ask questions about your documents
+              </p>
             </div>
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/30">
               <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></div>
@@ -142,37 +172,51 @@ export default function PDFChat() {
         </header>
 
         <div className="flex flex-1 gap-6 overflow-hidden p-6">
-
           {/* CHAT SECTION */}
           <div className="flex-1 flex flex-col min-w-0">
-
             {/* Messages Container */}
             {messages.length === 0 && pdfUploaded ? (
               <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2 scrollbar-hide">
                 <div className="space-y-4 text-slate-300 text-sm leading-relaxed">
                   <div>
-                    <h3 className="text-lg font-bold text-cyan-400 mb-2">📚 Welcome to PDF Chat Assistant</h3>
-                    <p>You've successfully uploaded your PDF! Now you can ask questions about its contents and get instant answers with source references.</p>
+                    <h3 className="text-lg font-bold text-cyan-400 mb-2">
+                      📚 Welcome to PDF Chat Assistant
+                    </h3>
+                    <p>
+                      You&apos;ve successfully uploaded your PDF! Now you can
+                      ask questions about its contents and get instant answers
+                      with source references.
+                    </p>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-cyan-300 mb-2">🎯 What You Can Do:</h4>
+                    <h4 className="font-semibold text-cyan-300 mb-2">
+                      🎯 What You Can Do:
+                    </h4>
                     <ul className="space-y-1 list-disc list-inside text-slate-400">
                       <li>Ask questions about specific content in your PDF</li>
-                      <li>Get answers with exact page references and excerpts</li>
+                      <li>
+                        Get answers with exact page references and excerpts
+                      </li>
                       <li>Search for key information quickly</li>
                       <li>Extract and summarize document content</li>
                     </ul>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-cyan-300 mb-2">💡 Example Questions:</h4>
+                    <h4 className="font-semibold text-cyan-300 mb-2">
+                      💡 Example Questions:
+                    </h4>
                     <div className="bg-slate-700/30 rounded-lg p-3 space-y-1 text-slate-400 text-xs">
-                      <p>"What is the main topic of this document?"</p>
-                      <p>"Summarize the key points from page 3"</p>
-                      <p>"What does it say about [specific topic]?"</p>
+                      <p>&quot;What is the main topic of this document?&quot;</p>
+                      <p>&quot;Summarize the key points from page 3&quot;</p>
+                      <p>
+                        &quot;What does it say about [specific topic]?&quot;
+                      </p>
                     </div>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-cyan-300 mb-2">✨ Features:</h4>
+                    <h4 className="font-semibold text-cyan-300 mb-2">
+                      ✨ Features:
+                    </h4>
                     <ul className="space-y-1 list-disc list-inside text-slate-400">
                       <li>Instant answers powered by AI</li>
                       <li>Source tracking with page numbers</li>
@@ -181,7 +225,9 @@ export default function PDFChat() {
                     </ul>
                   </div>
                   <div className="border-t border-slate-600/50 pt-3">
-                    <p className="text-slate-500 text-xs">👉 Start by typing a question in the input field below!</p>
+                    <p className="text-slate-500 text-xs">
+                      👉 Start by typing a question in the input field below!
+                    </p>
                   </div>
                 </div>
               </div>
@@ -189,16 +235,22 @@ export default function PDFChat() {
               <div className="h-full flex items-center justify-center text-center">
                 <div>
                   <div className="text-6xl mb-4">📄</div>
-                  <p className="text-slate-400 text-lg">Upload a PDF to get started</p>
-                  <p className="text-slate-500 text-sm mt-2">Ask questions and get instant answers</p>
+                  <p className="text-slate-400 text-lg">
+                    Upload a PDF to get started
+                  </p>
+                  <p className="text-slate-500 text-sm mt-2">
+                    Ask questions and get instant answers
+                  </p>
                 </div>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2 scrollbar-hide">
-                {messages.map((msg, i) => (
+                {messages.map((msg: Message, i: number) => (
                   <div
                     key={i}
-                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+                    className={`flex ${
+                      msg.role === "user" ? "justify-end" : "justify-start"
+                    }`}
                   >
                     <div
                       className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
@@ -214,13 +266,17 @@ export default function PDFChat() {
                       {/* Sources */}
                       {msg.sources && msg.sources.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-slate-600/30 space-y-2">
-                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Sources</p>
-                          {msg.sources.map((s, idx) => (
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                            Sources
+                          </p>
+                          {msg.sources.map((s: Source, idx: number) => (
                             <div
                               key={idx}
                               className="text-xs bg-slate-600/30 rounded px-2 py-1 text-slate-300"
                             >
-                              <span className="font-medium text-cyan-300">Page {s.page}</span>
+                              <span className="font-medium text-cyan-300">
+                                Page {s.page}
+                              </span>
                               <p className="mt-1 line-clamp-2">{s.content}</p>
                             </div>
                           ))}
@@ -235,8 +291,14 @@ export default function PDFChat() {
                     <div className="bg-slate-700/50 border border-slate-600/50 px-4 py-3 rounded-2xl rounded-bl-none">
                       <div className="flex gap-2">
                         <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce"></div>
-                        <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-                        <div className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" style={{ animationDelay: "0.4s" }}></div>
+                        <div
+                          className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce"
+                          style={{ animationDelay: "0.4s" }}
+                        ></div>
                       </div>
                     </div>
                   </div>
@@ -252,8 +314,12 @@ export default function PDFChat() {
                   type="text"
                   placeholder="Ask a question about your document..."
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setInput(e.target.value)
+                  }
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) =>
+                    e.key === "Enter" && !e.shiftKey && sendMessage()
+                  }
                   disabled={loading}
                   className="flex-1 px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-400 focus:outline-none focus:border-cyan-500/50 focus:ring-2 focus:ring-cyan-500/20 transition-all disabled:opacity-50"
                 />
@@ -276,25 +342,15 @@ export default function PDFChat() {
           <div className="w-80 flex flex-col gap-4">
             <div className="bg-slate-700/30 border border-slate-600/50 rounded-2xl p-6 backdrop-blur-sm">
               <h2 className="text-lg font-bold text-white mb-2">Upload PDF</h2>
-              <p className="text-xs text-slate-400 mb-4">Add documents to your knowledge base</p>
+              <p className="text-xs text-slate-400 mb-4">
+                Add documents to your knowledge base
+              </p>
 
               <div
                 className="relative"
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.classList.add("ring-2", "ring-cyan-500/50", "bg-cyan-500/5");
-                }}
-                onDragLeave={(e) => {
-                  e.currentTarget.classList.remove("ring-2", "ring-cyan-500/50", "bg-cyan-500/5");
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.currentTarget.classList.remove("ring-2", "ring-cyan-500/50", "bg-cyan-500/5");
-                  const droppedFile = e.dataTransfer.files[0];
-                  if (droppedFile?.type === "application/pdf") {
-                    setFile(droppedFile);
-                  }
-                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 <input
                   type="file"
@@ -306,15 +362,21 @@ export default function PDFChat() {
                   <div className="text-3xl mb-2">📁</div>
                   {file ? (
                     <div>
-                      <p className="text-sm font-medium text-cyan-300 truncate">{file.name}</p>
+                      <p className="text-sm font-medium text-cyan-300 truncate">
+                        {file.name}
+                      </p>
                       <p className="text-xs text-slate-400 mt-1">
                         {(file.size / 1024 / 1024).toFixed(2)} MB
                       </p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-sm font-medium text-slate-300">Drag PDF here</p>
-                      <p className="text-xs text-slate-500 mt-1">or click to browse</p>
+                      <p className="text-sm font-medium text-slate-300">
+                        Drag PDF here
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        or click to browse
+                      </p>
                     </div>
                   )}
                 </div>
@@ -337,7 +399,9 @@ export default function PDFChat() {
                       style={{ width: `${uploadProgress}%` }}
                     ></div>
                   </div>
-                  <p className="text-xs text-slate-400 mt-2">Processing your PDF, please wait...</p>
+                  <p className="text-xs text-slate-400 mt-2">
+                    Processing your PDF, please wait...
+                  </p>
                 </div>
               )}
 
@@ -356,19 +420,35 @@ export default function PDFChat() {
 
               {/* Document Requirements */}
               <div className="mt-6 p-4 rounded-lg bg-slate-600/20 border border-slate-600/30 space-y-3">
-                <p className="text-xs text-slate-400 font-semibold uppercase">Document Requirements</p>
+                <p className="text-xs text-slate-400 font-semibold uppercase">
+                  Document Requirements
+                </p>
                 <div className="space-y-2 text-xs text-slate-300">
                   <div className="flex gap-2">
                     <span className="text-lg">✓</span>
-                    <p><span className="font-medium text-cyan-300">Text-based PDFs</span> - Not scanned or image-based</p>
+                    <p>
+                      <span className="font-medium text-cyan-300">
+                        Text-based PDFs
+                      </span>{" "}
+                      - Not scanned or image-based
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <span className="text-lg">✓</span>
-                    <p><span className="font-medium text-cyan-300">Clear, readable text</span> - Ensure good quality and legibility</p>
+                    <p>
+                      <span className="font-medium text-cyan-300">
+                        Clear, readable text
+                      </span>{" "}
+                      - Ensure good quality and legibility
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <span className="text-lg">📄</span>
-                    <p><span className="font-medium text-slate-400">Up to 50MB size</span></p>
+                    <p>
+                      <span className="font-medium text-slate-400">
+                        Up to 50MB size
+                      </span>
+                    </p>
                   </div>
                 </div>
               </div>
@@ -384,17 +464,6 @@ export default function PDFChat() {
         .scrollbar-hide {
           -ms-overflow-style: none;
           scrollbar-width: none;
-        }
-
-        @keyframes slide-in-from-bottom-2 {
-          from {
-            opacity: 0;
-            transform: translateY(8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
         }
       `}</style>
     </div>
