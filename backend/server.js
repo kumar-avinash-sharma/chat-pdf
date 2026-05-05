@@ -77,7 +77,8 @@ app.get("/chat", async (req, res) => {
 
     // 1. Retrieve relevant chunks
     const vectorStore = await QdrantVectorStore.fromExistingCollection(embeddings, {
-      url: "http://localhost:6333",
+      url: process.env.QDRANT_URL,
+      apiKey: process.env.QDRANT_API_KEY,
       collectionName: `pdf-${pdfId}`,
     });
 
