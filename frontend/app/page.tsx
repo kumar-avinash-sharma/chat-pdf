@@ -12,7 +12,7 @@ export default function PDFChat() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [pdfUploaded, setPdfUploaded] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [pdfId, setPdfId] = useState(null);
 
   const scrollToBottom = () => {
